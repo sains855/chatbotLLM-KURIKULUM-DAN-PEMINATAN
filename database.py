@@ -7,7 +7,6 @@ import json
 import threading
 from datetime import datetime, timezone
 
-
 # Lokasi file JSON — Railway menyediakan persistent volume di /data
 # Fallback ke direktori proyek jika /data tidak tersedia (lokal/dev)
 _DATA_DIR  = "/data" if os.path.isdir("/data") else os.path.join(os.path.dirname(__file__), "data")
@@ -19,8 +18,12 @@ def _load() -> dict:
     """Baca seluruh data dari file JSON. Kembalikan dict kosong jika belum ada."""
     if not os.path.exists(_DB_FILE):
         return {"records": []}
-    with open(_DB_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(_DB_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        # Jika file korup atau kosong, kembalikan struktur default
+        return {"records": []}
 
 
 def _save(data: dict) -> None:
@@ -49,14 +52,15 @@ class DatabaseManager:
         now = datetime.now(timezone.utc).isoformat()
         with _LOCK:
             data = _load()
-            # Tentukan id berikutnya
-            next_id = (max((r["id"] for r in data["records"]), default=0)) + 1
+            # Tentukan id berikutnya secara incremental
+            next_id = (max((int(r["id"]) for r in data["records"]), default=0)) + 1
+            
             for index, chunk in enumerate(chunks):
                 data["records"].append({
                     "id":          next_id,
-                    "file_name":   file_name,
-                    "chunk_index": index,
-                    "content":     chunk,
+                    "file_name":   str(file_name),
+                    "chunk_index": int(index),
+                    "content":     str(chunk),
                     "created_at":  now
                 })
                 next_id += 1
@@ -74,9 +78,13 @@ class DatabaseManager:
         for r in data["records"]:
             fn = r["file_name"]
             if fn not in aggregated:
-                aggregated[fn] = {"file_name": fn, "total_chunks": 0, "uploaded_at": r["created_at"]}
+                aggregated[fn] = {
+                    "file_name": fn, 
+                    "total_chunks": 0, 
+                    "uploaded_at": r["created_at"]
+                }
             aggregated[fn]["total_chunks"] += 1
-            # Simpan timestamp terbaru
+            # Simpan timestamp terbaru jika ada bentrokan
             if r["created_at"] > aggregated[fn]["uploaded_at"]:
                 aggregated[fn]["uploaded_at"] = r["created_at"]
 
@@ -86,12 +94,26 @@ class DatabaseManager:
     # READ — semua chunk (untuk rebuild FAISS)
     # ------------------------------------------------------------------
     def get_all_chunks(self) -> list:
-        """[READ] Kembalikan semua teks chunk berurutan untuk inisialisasi FAISS."""
+        """
+        [READ] Kembalikan semua record chunk berurutan untuk inisialisasi FAISS.
+        Mengembalikan list of dict agar app.py bisa memetakan teks ke metadata file aslinya.
+        """
         with _LOCK:
             data = _load()
-        # Urutkan by id untuk menjaga konsistensi dengan urutan insert
-        sorted_records = sorted(data["records"], key=lambda r: r["id"])
-        return [r["content"] for r in sorted_records]
+            
+        # Urutkan berdasarkan ID untuk menjaga konsistensi urutan indeks FAISS
+        sorted_records = sorted(data["records"], key=lambda r: int(r["id"]))
+        
+        return [
+            {
+                "id": int(r["id"]),
+                "file_name": str(r["file_name"]),
+                "chunk_index": int(r["chunk_index"]),
+                "content": str(r["content"]),
+                "created_at": r["created_at"]
+            }
+            for r in sorted_records
+        ]
 
     # ------------------------------------------------------------------
     # DELETE
@@ -101,8 +123,11 @@ class DatabaseManager:
         with _LOCK:
             data    = _load()
             before  = len(data["records"])
+            # Filter hanya dokumen yang namanya TIDAK sama dengan file_name
             data["records"] = [r for r in data["records"] if r["file_name"] != file_name]
             after   = len(data["records"])
+            
             if before != after:
                 _save(data)
+                
         return before != after
