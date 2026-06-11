@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard RAG & Chatbot Peminatan Ilkom UHO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Desain Scrollbar Kustom untuk Box Chat */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c7d2fe;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #818cf8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 min-h-screen flex flex-col">
+
+    <header class="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-md px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-graduation-cap text-2xl text-yellow-300"></i>
+            <div>
+                <h1 class="text-xl font-bold tracking-wide">Sistem RAG Akademik</h1>
+                <p class="text-xs text-blue-100">Jurusan Ilmu Komputer FMIPA UHO</p>
+            </div>
+        </div>
+        <span class="bg-white/20 text-xs px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/10 font-medium">
+            <i class="fa-solid fa-circle-dot text-green-400 mr-1.5 animate-pulse"></i>Gemini 2.5 Flash Aktif
+        </span>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 max-w-[1600px] w-full mx-auto">
+        
+        <section class="lg:col-span-5 flex flex-col space-y-6">
+            
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex items-center space-x-2 mb-4 border-b pb-2">
+                    <i class="fa-solid fa-file-shield text-indigo-500 text-lg"></i>
+                    <h2 class="font-bold text-slate-700">Batch Upload Knowledge Base</h2>
+                </div>
+                
+                <form id="knowledge-form" class="space-y-4" enctype="multipart/form-data">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Pilih Dokumen (Bisa pilih banyak sekaligus)</label>
+                        <input type="file" id="file_source" name="files" accept=".pdf,.docx,.txt" multiple
+                            class="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" required>
+                    </div>
+                    <button type="submit" id="btn-submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium text-sm py-2.5 px-4 rounded-xl shadow-sm transition-all duration-200 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-cloud-arrow-up"></i><span>Upload & Ekstrak Semua File</span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex-1 flex flex-col min-h-[320px]">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-folder-open text-purple-500 text-lg"></i>
+                        <h2 class="font-bold text-slate-700">Knowledge Base Terdaftar</h2>
+                    </div>
+                    <button onclick="loadKnowledgeList()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                        <i class="fa-solid fa-rotate-right mr-1"></i>Refresh
+                    </button>
+                </div>
+                
+                <div class="overflow-y-auto custom-scrollbar flex-1 max-h-[380px] pr-1" id="knowledge-list-container">
+                    <p class="text-center text-slate-400 text-xs py-8">Memuat daftar dokumen...</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[calc(100vh-140px)] min-h-[550px]">
+            
+            <div class="p-4 border-b border-slate-100 flex items-center space-x-3 bg-gradient-to-r from-slate-50 to-indigo-50/30 rounded-t-2xl">
+                <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center border border-indigo-200 shadow-sm text-indigo-600">
+                    <i class="fa-solid fa-robot text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-700 text-sm">Konsultan Peminatan AI</h3>
+                    <p class="text-xs text-emerald-600 font-medium flex items-center">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-1.5 animate-ping"></span>
+                        Analisis Sinkronisasi Vektor Aktif
+                    </p>
+                </div>
+            </div>
+
+            <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50">
+                <div class="flex items-start space-x-2.5 max-w-[85%]">
+                    <div class="w-7 h-7 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs shrink-0 shadow-sm">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div class="bg-white border border-slate-100 px-4 py-2.5 rounded-2xl rounded-tl-none shadow-sm text-sm text-slate-700">
+                        Halo mahasiswa Ilmu Komputer UHO! Silakan unggah dokumen pedoman peminatan Anda di panel sebelah kiri (Anda bisa memilih banyak file sekaligus), kemudian tanyakan apa pun di sini. Saya akan mensintesis jawaban akurat berdasarkan dokumen tersebut.
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-100 bg-white rounded-b-2xl">
+                <form id="chat-form" class="flex space-x-2">
+                    <input type="text" id="chat-message" placeholder="Tanyakan syarat peminatan data science atau rekayasa perangkat lunak..." 
+                        class="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all" autocomplete="off" required>
+                    <button type="submit" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-5 rounded-xl transition-all duration-200 shadow-sm flex items-center justify-center">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer class="text-center py-3 bg-white border-t text-xs text-slate-400 mt-auto">
+        &copy; 2026 Ilmu Komputer FMIPA Universitas Halu Oleo. Powered by Flask, MySQL & Gemini API.
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadKnowledgeList();
+            
+            // Handler Upload Berkas Fisik Batch (POST)
+            document.getElementById('knowledge-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const fileInput = document.getElementById('file_source');
+                if (fileInput.files.length === 0) return;
+
+                const formData = new FormData();
+                // Iterasi seluruh file yang dipilih untuk dimasukkan ke form data dengan key 'files'
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('files', fileInput.files[i]);
+                }
+
+                const btnSubmit = document.getElementById('btn-submit');
+                const originalHtml = btnSubmit.innerHTML;
+                btnSubmit.disabled = true;
+                btnSubmit.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Memproses ${fileInput.files.length} Dokumen...</span>`;
+
+                try {
+                    const response = await fetch('/api/knowledge', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const resData = await response.json();
+                    
+                    if (response.ok) {
+                        let alertMsg = resData.message;
+                        if (resData.errors && resData.errors.length > 0) {
+                            alertMsg += "\n\nCatatan beberapa file:\n" + resData.errors.join("\n");
+                        }
+                        alert(alertMsg);
+                        document.getElementById('knowledge-form').reset();
+                        loadKnowledgeList();
+                    } else {
+                        alert(resData.error || "Gagal memproses unggahan batch file.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Terjadi masalah koneksi ke server Flask.");
+                } finally {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = originalHtml;
+                }
+            });
+
+            // Handler Form Percakapan Chatbot
+            document.getElementById('chat-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const msgInput = document.getElementById('chat-message');
+                const message = msgInput.value.trim();
+                if(!message) return;
+
+                // Tampilkan pesan user ke layar
+                appendMessage(message, 'user');
+                msgInput.value = '';
+
+                // Munculkan animasi loading bot
+                const loadingId = appendLoadingIndicator();
+
+                try {
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message })
+                    });
+                    const data = await response.json();
+                    document.getElementById(loadingId).remove();
+
+                    if(response.ok) {
+                        appendMessage(data.response, 'bot');
+                    } else {
+                        appendMessage(`Gagal memproses pesan: ${data.error}`, 'bot');
+                    }
+                } catch (err) {
+                    document.getElementById(loadingId).remove();
+                    appendMessage("Koneksi terputus. Gagal terhubung ke chatbot.", 'bot');
+                }
+            });
+        });
+
+        // Load daftar dokumen dari database MySQL
+        async function loadKnowledgeList() {
+            const container = document.getElementById('knowledge-list-container');
+            try {
+                const response = await fetch('/api/knowledge');
+                const result = await response.json();
+                
+                if(!response.ok || !result.data || result.data.length === 0) {
+                    container.innerHTML = `<p class="text-center text-slate-400 text-xs py-8">Belum ada berkas pendukung ter-upload di MySQL.</p>`;
+                    return;
+                }
+
+                container.innerHTML = result.data.map(doc => `
+                    <div class="flex items-center justify-between p-3 mb-2 bg-slate-50 rounded-xl border border-slate-100 hover:bg-indigo-50/20 transition-all">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <h4 class="text-sm font-semibold text-slate-700 truncate" title="${doc.file_name}">${doc.file_name}</h4>
+                            <p class="text-xs text-slate-400 mt-0.5">${doc.total_chunks} Fragmen vektor aktif</p>
+                        </div>
+                        <button onclick="deleteKnowledge('${doc.file_name}')" class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0" title="Hapus Dokumen">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                `).join('');
+            } catch (err) {
+                container.innerHTML = `<p class="text-center text-red-400 text-xs py-8">Gagal memuat list dokumen.</p>`;
+            }
+        }
+
+        // Hapus Dokumen Permanen (DELETE)
+        async function deleteKnowledge(fileName) {
+            if(!confirm(`Apakah Anda yakin ingin menghapus dokumen "${fileName}" secara permanen dari MySQL dan FAISS Index?`)) return;
+            
+            try {
+                const response = await fetch('/api/knowledge', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_name: fileName })
+                });
+                const res = await response.json();
+                if(response.ok) {
+                    alert(res.message);
+                    loadKnowledgeList();
+                } else {
+                    alert(res.error);
+                }
+            } catch (err) {
+                alert("Gagal memproses aksi penghapusan berkas.");
+            }
+        }
+
+        // Cetak bubble chat ke area visual box
+        function appendMessage(text, sender) {
+            const chatBox = document.getElementById('chat-box');
+            const wrapper = document.createElement('div');
+            
+            if(sender === 'user') {
+                wrapper.className = "flex items-start justify-end space-x-2.5 max-w-[85%] ml-auto";
+                wrapper.innerHTML = `
+                    <div class="bg-gradient-to-br from-indigo-600 to-purple-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-none shadow-sm text-sm">
+                        ${text.replace(/\n/g, '<br>')}
+                    </div>
+                    <div class="w-7 h-7 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs shrink-0 shadow-sm font-semibold">U</div>
+                `;
+            } else {
+                wrapper.className = "flex items-start space-x-2.5 max-w-[85%]";
+                wrapper.innerHTML = `
+                    <div class="w-7 h-7 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs shrink-0 shadow-sm">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div class="bg-white border border-slate-100 px-4 py-2.5 rounded-2xl rounded-tl-none shadow-sm text-sm leading-relaxed whitespace-pre-line text-slate-700">
+                        ${text}
+                    </div>
+                `;
+            }
+            chatBox.appendChild(wrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Animasi Tiga Titik Pantul saat Gemini Berpikir
+        function appendLoadingIndicator() {
+            const chatBox = document.getElementById('chat-box');
+            const id = 'loading-' + Date.now();
+            const wrapper = document.createElement('div');
+            wrapper.id = id;
+            wrapper.className = "flex items-start space-x-2.5 max-w-[85%]";
+            wrapper.innerHTML = `
+                <div class="w-7 h-7 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs shrink-0 shadow-sm">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="bg-white border border-slate-100 px-4 py-2.5 rounded-2xl rounded-tl-none shadow-sm text-sm text-slate-400 flex items-center space-x-1">
+                    <span class="animate-bounce">●</span>
+                    <span class="animate-bounce [animation-delay:0.2s]">●</span>
+                    <span class="animate-bounce [animation-delay:0.4s]">●</span>
+                    <span class="text-xs ml-1.5 font-medium text-slate-400">Menyintesis multi-dokumen...</span>
+                </div>
+            `;
+            chatBox.appendChild(wrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return id;
+        }
+    </script>
+</body>
+</html>

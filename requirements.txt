@@ -1,0 +1,9 @@
+flask==3.1.0
+google-genai==1.16.0
+faiss-cpu==1.9.0
+mysql-connector-python==9.3.0
+pypdf==5.4.0
+docx2txt==0.8
+python-dotenv==1.1.0
+numpy==2.2.5
+gunicorn==23.0.0

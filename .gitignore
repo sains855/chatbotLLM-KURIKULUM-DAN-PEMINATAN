@@ -1,0 +1,29 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# FAISS cache — ephemeral di Railway, rebuild otomatis dari DB
+my_index.faiss
+my_index_docs.pkl
+
+# Dokumen PDF/DOCX — upload via API setelah deploy (terlalu besar untuk GitHub)
+documents/*.pdf
+documents/*.docx
+documents/*.txt
+# Kecuali README dokumen
+!documents/README_DOKUMEN.md
+
+# OS
+.DS_Store
+Thumbs.db
