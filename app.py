@@ -210,14 +210,11 @@ def reload_vector_index(force_rebuild: bool = False):
 # =====================================================================
 
 with app.app_context():
-    # LANGKAH 1: Scan folder documents/ → masukkan file baru ke DB
-    # Di Railway: folder ini kosong tiap deploy (ephemeral filesystem).
-    # Dokumen diupload via POST /api/knowledge setelah deploy → chunk tersimpan di MySQL.
+    # LANGKAH 1: Scan folder documents/ dan masukkan file baru ke DB
     new_docs_count = load_local_documents_to_db()
 
     # LANGKAH 2: Load/rebuild FAISS index
-    # Di Railway: my_index.faiss tidak ada (ephemeral) → otomatis rebuild dari MySQL.
-    # Di lokal: jika cache ada & sinkron → load dari disk (0 token API).
+    # force_rebuild=True hanya jika ada dokumen baru yang baru saja dimasukkan ke DB
     reload_vector_index(force_rebuild=bool(new_docs_count))
 
 

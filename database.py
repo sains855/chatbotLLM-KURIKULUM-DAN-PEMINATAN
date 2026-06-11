@@ -1,56 +1,108 @@
+# database.py — JSON-based storage (pengganti MySQL)
+# Drop-in replacement: semua method signature identik dengan versi MySQL.
+# Data disimpan di data/knowledge_base.json agar persisten di Railway Volume.
+
 import os
-import time  # <-- Tambahkan import ini
-import mysql.connector
+import json
+import threading
+from datetime import datetime, timezone
+
+
+# Lokasi file JSON — Railway menyediakan persistent volume di /data
+# Fallback ke direktori proyek jika /data tidak tersedia (lokal/dev)
+_DATA_DIR  = "/data" if os.path.isdir("/data") else os.path.join(os.path.dirname(__file__), "data")
+_DB_FILE   = os.path.join(_DATA_DIR, "knowledge_base.json")
+_LOCK      = threading.Lock()   # thread-safety untuk concurrent request Flask
+
+
+def _load() -> dict:
+    """Baca seluruh data dari file JSON. Kembalikan dict kosong jika belum ada."""
+    if not os.path.exists(_DB_FILE):
+        return {"records": []}
+    with open(_DB_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save(data: dict) -> None:
+    """Tulis ulang seluruh data ke file JSON secara atomik."""
+    os.makedirs(_DATA_DIR, exist_ok=True)
+    # Tulis ke file tmp dulu, lalu rename — mencegah korupsi jika proses tiba-tiba mati
+    tmp_path = _DB_FILE + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, _DB_FILE)
+
 
 class DatabaseManager:
     def __init__(self):
-        # 1. Konfigurasi disesuaikan dengan Environment Variables bawaan Railway
-        self.host = os.environ.get('MYSQLHOST', os.environ.get('DB_HOST', '127.0.0.1'))
-        self.user = os.environ.get('MYSQLUSER', os.environ.get('DB_USER', 'root'))
-        self.password = os.environ.get('MYSQLPASSWORD', os.environ.get('DB_PASSWORD', 'password'))
-        self.database_name = os.environ.get('MYSQLDATABASE', os.environ.get('DB_NAME', 'uho_rag_db'))
-        
-        port_env = os.environ.get('MYSQLPORT', os.environ.get('DB_PORT', '3306'))
-        self.port = int(port_env)
+        os.makedirs(_DATA_DIR, exist_ok=True)
+        # Inisialisasi file jika belum ada
+        if not os.path.exists(_DB_FILE):
+            _save({"records": []})
+        print(f"--> [DATABASE INFO] JSON storage siap digunakan: {_DB_FILE}")
 
-        # Simpan konfigurasi ke self.config DULU sebelum dipakai di fungsi inisialisasi
-        self.config = {
-            'host': self.host,
-            'user': self.user,
-            'password': self.password,
-            'database': self.database_name,
-            'port': self.port
-        }
+    # ------------------------------------------------------------------
+    # CREATE
+    # ------------------------------------------------------------------
+    def save_chunks(self, file_name: str, chunks: list) -> None:
+        """[CREATE] Simpan banyak chunks dokumen ke JSON storage."""
+        now = datetime.now(timezone.utc).isoformat()
+        with _LOCK:
+            data = _load()
+            # Tentukan id berikutnya
+            next_id = (max((r["id"] for r in data["records"]), default=0)) + 1
+            for index, chunk in enumerate(chunks):
+                data["records"].append({
+                    "id":          next_id,
+                    "file_name":   file_name,
+                    "chunk_index": index,
+                    "content":     chunk,
+                    "created_at":  now
+                })
+                next_id += 1
+            _save(data)
 
-        # 2. Jalankan inisialisasi otomatis dengan mekanisme "Sabar Menunggu"
-        self._safe_auto_initialize()
+    # ------------------------------------------------------------------
+    # READ — metadata
+    # ------------------------------------------------------------------
+    def get_all_documents_metadata(self) -> list:
+        """[READ] Kembalikan list file unik beserta jumlah chunk & waktu upload."""
+        with _LOCK:
+            data = _load()
 
-    def _safe_auto_initialize(self):
-        """Mencoba menjalankan inisialisasi tabel dengan toleransi waktu tunggu (Retry)"""
-        max_retries = 5
-        delay = 5  # Jeda waktu dalam detik setiap kali gagal
-        
-        for i in range(max_retries):
-            try:
-                print(f"[*] Mencoba menginisialisasi database... (Percobaan {i+1}/{max_retries})")
-                self._auto_initialize_db_and_tables()
-                print("[+] Database & Tabel berhasil diinisialisasi!")
-                return  # Keluar dari fungsi jika sukses
-            except mysql.connector.errors.DatabaseError as err:
-                # Jika error-nya karena masalah koneksi (seperti error 111 atau 2003)
-                print(f"[!] MySQL belum siap atau koneksi ditolak: {err}")
-                if i < max_retries - 1:
-                    print(f"[*] Menunggu {delay} detik sebelum mencoba kembali...")
-                    time.sleep(delay)
-                else:
-                    print("[-] Sudah mencoba 5 kali dan tetap gagal. Menghentikan aplikasi.")
-                    raise err # Lempar error asli jika sudah mentok gagal terus
+        aggregated = {}
+        for r in data["records"]:
+            fn = r["file_name"]
+            if fn not in aggregated:
+                aggregated[fn] = {"file_name": fn, "total_chunks": 0, "uploaded_at": r["created_at"]}
+            aggregated[fn]["total_chunks"] += 1
+            # Simpan timestamp terbaru
+            if r["created_at"] > aggregated[fn]["uploaded_at"]:
+                aggregated[fn]["uploaded_at"] = r["created_at"]
 
-    def _auto_initialize_db_and_tables(self):
-        # Di sini isi fungsi kamu yang lama untuk membuat DB dan tabel.
-        # Pastikan fungsi ini menggunakan koneksi biasa.
-        pass
+        return list(aggregated.values())
 
-    def get_connection(self):
-        # Tambahkan juga retry mini di sini untuk operasional sehari-hari jika diperlukan
-        return mysql.connector.connect(**self.config)
+    # ------------------------------------------------------------------
+    # READ — semua chunk (untuk rebuild FAISS)
+    # ------------------------------------------------------------------
+    def get_all_chunks(self) -> list:
+        """[READ] Kembalikan semua teks chunk berurutan untuk inisialisasi FAISS."""
+        with _LOCK:
+            data = _load()
+        # Urutkan by id untuk menjaga konsistensi dengan urutan insert
+        sorted_records = sorted(data["records"], key=lambda r: r["id"])
+        return [r["content"] for r in sorted_records]
+
+    # ------------------------------------------------------------------
+    # DELETE
+    # ------------------------------------------------------------------
+    def delete_document(self, file_name: str) -> bool:
+        """[DELETE] Hapus semua chunk milik file_name. Return True jika ada yang terhapus."""
+        with _LOCK:
+            data    = _load()
+            before  = len(data["records"])
+            data["records"] = [r for r in data["records"] if r["file_name"] != file_name]
+            after   = len(data["records"])
+            if before != after:
+                _save(data)
+        return before != after
